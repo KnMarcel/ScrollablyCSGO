@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CS2 Map Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800&family=Share+Tech+Mono&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080C10;--bg2:#0D1117;--bg3:#111923;--bg4:#1A2535;
+  --orange:#F4730E;--ct:#4B9FD4;--kill:#C8312A;--gold:#E8C84B;
+  --green:#4CAF50;--purple:#9B6FD4;
+  --txt:#D0D7E0;--txt2:#6B7A8D;--border:#1C2B3A;--border2:#253545;
+  --glow:rgba(244,115,14,0.12);
+}
+html,body{background:var(--bg);color:var(--txt);font-family:'Barlow',sans-serif;height:100vh;overflow:hidden}
+body{display:flex;flex-direction:column}
+
+/* ══ TOPBAR ══════════════════════════════════════════════════════════════════ */
+#topbar{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:0 12px;height:42px;display:flex;align-items:center;
+  gap:12px;flex-shrink:0;
+}
+.logo{
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;
+  font-size:1rem;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--orange);text-shadow:0 0 20px rgba(244,115,14,0.4);
+  white-space:nowrap;
+}
+.logo span{color:var(--txt2);font-weight:400;font-size:0.65rem;letter-spacing:0.15em;margin-left:8px}
+.sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+
+/* MAP TABS */
+#map-tabs{display:flex;gap:2px;overflow-x:auto;flex:1}
+#map-tabs::-webkit-scrollbar{display:none}
+.map-tab{
+  font-family:'Share Tech Mono',monospace;font-size:0.6rem;
+  letter-spacing:0.1em;text-transform:uppercase;
+  padding:4px 10px;border:1px solid transparent;
+  border-radius:0;cursor:pointer;color:var(--txt2);
+  white-space:nowrap;transition:all 0.15s;background:transparent;
+}
+.map-tab:hover{color:var(--txt);border-color:var(--border2)}
+.map-tab.active{
+  color:var(--orange);border-color:var(--orange);
+  background:rgba(244,115,14,0.08);
+}
+
+/* FILTER CONTROLS */
+#filters{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.f-label{font-family:'Share Tech Mono',monospace;font-size:0.5rem;letter-spacing:0.12em;color:var(--txt2);text-transform:uppercase;white-space:nowrap}
+select{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-left:2px solid var(--orange);color:var(--txt);
+  font-family:'Barlow Condensed',sans-serif;font-size:0.78rem;
+  padding:2px 6px;cursor:pointer;outline:none;appearance:none;
+  -webkit-appearance:none;
+}
+select:focus{border-color:var(--orange)}
+
+/* ══ MAIN 3-COL ══════════════════════════════════════════════════════════════ */
+#main{display:grid;grid-template-columns:190px 1fr 190px;flex:1;overflow:hidden;min-height:0}
+
+/* ══ PANELS ══════════════════════════════════════════════════════════════════ */
+.side-panel{overflow-y:auto;display:flex;flex-direction:column}
+.side-panel::-webkit-scrollbar{width:3px}
+.side-panel::-webkit-scrollbar-thumb{background:var(--orange)}
+#left{background:var(--bg2);border-right:1px solid var(--border)}
+#right{background:var(--bg2);border-left:1px solid var(--border)}
+
+.pblock{padding:10px 12px;border-bottom:1px solid var(--border)}
+.ptitle{
+  font-family:'Barlow Condensed',sans-serif;font-size:0.62rem;
+  font-weight:700;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--orange);border-left:2px solid var(--orange);
+  padding-left:6px;margin-bottom:8px;
+}
+
+/* ══ RADAR ════════════════════════════════════════════════════════════════════ */
+#radarWrap{position:relative;width:100%;aspect-ratio:1}
+
+/* ══ WEAPON BARS ════════════════════════════════════════════════════════════ */
+.wp-row{
+  margin-bottom:5px;cursor:pointer;padding:3px 4px;
+  border-radius:2px;transition:background 0.15s;
+}
+.wp-row:hover,.wp-row.active{background:var(--bg4)}
+.wp-row-head{display:flex;justify-content:space-between;margin-bottom:2px}
+.wp-name{font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:var(--txt)}
+.wp-cnt{font-family:'Share Tech Mono',monospace;font-size:0.55rem;color:var(--txt2)}
+.bar-bg{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.bar-fill{height:100%;border-radius:2px;width:0;transition:width 0.8s cubic-bezier(0.4,0,0.2,1)}
+
+/* ══ HITBOX ════════════════════════════════════════════════════════════════ */
+.hb-row{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+.hb-label{font-family:'Share Tech Mono',monospace;font-size:0.52rem;color:var(--txt2);width:50px;flex-shrink:0}
+.hb-bg{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.hb-fill{height:100%;border-radius:2px;transition:width 0.8s cubic-bezier(0.4,0,0.2,1)}
+.hb-pct{font-family:'Share Tech Mono',monospace;font-size:0.52rem;color:var(--txt2);width:26px;text-align:right}
+
+/* ══ KPI CARDS ═══════════════════════════════════════════════════════════════ */
+.kpi{padding:8px 12px;border-bottom:1px solid var(--border)}
+.kpi-l{font-family:'Share Tech Mono',monospace;font-size:0.48rem;letter-spacing:0.12em;color:var(--txt2);text-transform:uppercase;margin-bottom:1px}
+.kpi-v{font-family:'Barlow Condensed',sans-serif;font-size:1.9rem;font-weight:700;line-height:1;transition:color 0.3s}
+
+/* ══ ATFF STRIP ══════════════════════════════════════════════════════════════ */
+#atff-track{position:relative;height:4px;background:linear-gradient(to right,var(--kill),var(--gold),var(--green));border-radius:2px;margin:6px 0 4px}
+#atff-marker{
+  position:absolute;top:-5px;width:2px;height:14px;
+  background:var(--orange);transform:translateX(-50%);
+  transition:left 0.6s cubic-bezier(0.4,0,0.2,1);
+}
+#atff-marker::before{
+  content:attr(data-v);position:absolute;bottom:16px;left:50%;
+  transform:translateX(-50%);
+  font-family:'Share Tech Mono',monospace;font-size:0.52rem;
+  color:var(--orange);white-space:nowrap;
+}
+.atff-ends{display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:0.48rem;color:var(--txt2)}
+
+/* ══ LAYER PILLS ═════════════════════════════════════════════════════════════ */
+#layer-pills{display:flex;flex-wrap:wrap;gap:3px;padding:8px 12px;border-bottom:1px solid var(--border)}
+.pill{
+  font-family:'Share Tech Mono',monospace;font-size:0.48rem;letter-spacing:0.06em;
+  padding:2px 6px;border:1px solid var(--border2);cursor:pointer;
+  color:var(--txt2);background:transparent;text-transform:uppercase;
+  transition:all 0.15s;
+}
+.pill:hover{border-color:var(--txt2);color:var(--txt)}
+.pill.active{background:var(--orange);border-color:var(--orange);color:#fff}
+
+/* ══ CENTER MAP ══════════════════════════════════════════════════════════════ */
+#center{position:relative;overflow:hidden;background:var(--bg)}
+#mapCanvas,#heatCanvas{position:absolute;inset:0;width:100%;height:100%}
+#heatCanvas{transition:opacity 0.25s}
+
+/* Loading overlay */
+#loading{
+  position:absolute;inset:0;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:10;transition:opacity 0.4s;
+}
+#loading.hidden{opacity:0;pointer-events:none}
+.spinner{
+  width:32px;height:32px;border:2px solid var(--border2);
+  border-top-color:var(--orange);border-radius:50%;
+  animation:spin 0.8s linear infinite;margin-bottom:12px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#load-text{font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:var(--txt2);letter-spacing:0.15em}
+
+/* ══ CHARTS ══════════════════════════════════════════════════════════════════ */
+.chart-wrap{position:relative;padding:2px}
+.chart-h80{height:80px}
+.chart-h100{height:100px}
+
+/* ══ MINI LEGEND ═════════════════════════════════════════════════════════════ */
+.legend{display:flex;gap:8px;flex-wrap:wrap;padding:4px 12px 6px;border-bottom:1px solid var(--border)}
+.legend-item{display:flex;align-items:center;gap:3px;font-family:'Share Tech Mono',monospace;font-size:0.5rem;color:var(--txt2)}
+.legend-dot{width:8px;height:8px;border-radius:1px;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="logo">◈ CS2 INTEL <span>// map analysis</span></div>
+  <div class="sep"></div>
+  <div id="map-tabs"></div>
+  <div class="sep"></div>
+  <div id="filters">
+    <span class="f-label">Side</span>
+    <select id="sel-side">
+      <option value="all">All</option>
+      <option value="ct">CT</option>
+      <option value="t">T</option>
+    </select>
+    <span class="f-label">Nade</span>
+    <select id="sel-nade">
+      <option value="all">All</option>
+      <option value="Smoke">Smoke</option>
+      <option value="Flash">Flash</option>
+      <option value="HE">HE</option>
+      <option value="Fire">Fire</option>
+      <option value="Decoy">Decoy</option>
+    </select>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- LEFT -->
+  <div id="left" class="side-panel">
+    <div class="pblock">
+      <div class="ptitle">Weapon Profile</div>
+      <div id="radarWrap"><canvas id="radarChart"></canvas></div>
+    </div>
+    <div class="pblock">
+      <div class="ptitle">Top Weapons</div>
+      <div id="wp-bars"></div>
+    </div>
+    <div class="pblock">
+      <div class="ptitle">Hitbox</div>
+      <div id="hb-bars"></div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div id="center">
+    <canvas id="mapCanvas"></canvas>
+    <canvas id="heatCanvas"></canvas>
+    <div id="layer-pills"></div>
+    <div id="loading">
+      <div class="spinner"></div>
+      <div id="load-text">Loading map data...</div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div id="right" class="side-panel">
+
+    <!-- ATFF -->
+    <div class="pblock">
+      <div class="ptitle">Time to First Frag</div>
+      <div id="atff-track"><div id="atff-marker" data-v=""></div></div>
+      <div class="atff-ends"><span id="atff-mn"></span><span id="atff-mx"></span></div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi"><div class="kpi-l">Kills</div><div class="kpi-v" id="kv-kills" style="color:var(--kill)">—</div></div>
+    <div class="kpi"><div class="kpi-l">Flash → Kill (3s)</div><div class="kpi-v" id="kv-flash" style="color:var(--gold)">—</div></div>
+    <div class="kpi"><div class="kpi-l">Nades thrown</div><div class="kpi-v" id="kv-nades" style="color:var(--ct)">—</div></div>
+    <div class="kpi"><div class="kpi-l">Avg DMG / hit</div><div class="kpi-v" id="kv-dmg" style="color:var(--orange)">—</div></div>
+
+    <!-- Utility CT vs T -->
+    <div class="pblock">
+      <div class="ptitle">CT vs T — Utility</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--ct)"></div>CT</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>T</div>
+      </div>
+      <div class="chart-wrap chart-h100"><canvas id="utilChart"></canvas></div>
+    </div>
+
+    <!-- Momentum -->
+    <div class="pblock">
+      <div class="ptitle">Map Momentum</div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--ct)"></div>CT+</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>T+</div>
+      </div>
+      <div class="chart-wrap chart-h80"><canvas id="momChart"></canvas></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ══ CONFIG ═══════════════════════════════════════════════════════════════════
+const HF_BASE = 'https://huggingface.co/datasets/HeadShottt/CS-GO/resolve/main/dashboard';
+const GH_MAPS = 'https://raw.githubusercontent.com/KnMarcel/cs-go-analytics/main/Desktop/CSGO_Analytics/maps';
+const MAPS    = ['de_dust2','de_mirage','de_inferno','de_overpass','de_cache','de_cbble','de_train'];
+const BINS    = 100;
+
+const C = {
+  orange:'#F4730E',ct:'#4B9FD4',kill:'#C8312A',gold:'#E8C84B',
+  green:'#4CAF50',purple:'#9B6FD4',
+  txt:'#D0D7E0',txt2:'#6B7A8D',border:'#1C2B3A',bg:'#080C10',bg3:'#111923',bg4:'#1A2535',
+};
+
+const RADAR_COLORS=[
+  [C.orange,'rgba(244,115,14,0.15)'],[C.ct,'rgba(75,159,212,0.12)'],
+  [C.green,'rgba(76,175,80,0.10)'],[C.kill,'rgba(200,49,42,0.10)'],
+  [C.gold,'rgba(232,200,75,0.09)'],[C.purple,'rgba(155,111,212,0.09)'],
+];
+
+const HM_SCALES = {
+  dmg: [[0,'rgba(0,0,0,0)'],[0.15,'rgba(75,159,212,0.3)'],[0.45,'rgba(244,115,14,0.7)'],[0.75,'rgba(200,49,42,0.9)'],[1,'rgba(255,255,255,1)']],
+  ct:  [[0,'rgba(0,0,0,0)'],[0.3,'rgba(75,159,212,0.4)'],[0.7,'rgba(75,159,212,0.85)'],[1,'rgba(75,159,212,1)']],
+  t:   [[0,'rgba(0,0,0,0)'],[0.3,'rgba(244,115,14,0.4)'],[0.7,'rgba(244,115,14,0.85)'],[1,'rgba(244,115,14,1)']],
+  land:[[0,'rgba(0,0,0,0)'],[0.2,'rgba(232,200,75,0.3)'],[0.6,'rgba(232,200,75,0.8)'],[1,'rgba(232,200,75,1)']],
+  thrown:[[0,'rgba(0,0,0,0)'],[0.2,'rgba(155,111,212,0.3)'],[0.6,'rgba(155,111,212,0.8)'],[1,'rgba(155,111,212,1)']],
+};
+
+// ══ LAYER DEFINITIONS ════════════════════════════════════════════════════════
+const LAYERS = [
+  {id:'dmg_vic',     label:'Kill zones',    scale:'dmg'},
+  {id:'dmg_att',     label:'Fire positions',scale:'dmg'},
+  {id:'nade_land_all',label:'Nade landed',  scale:'land'},
+  {id:'nade_thrown_all',label:'Nade thrown',scale:'thrown'},
+];
+
+// ══ STATE ════════════════════════════════════════════════════════════════════
+const S = {
+  map: MAPS[0], data: null,
+  layer: 'dmg_vic', nade: 'all', side: 'all',
+  activeWp: null, animId: null,
+};
+
+// ══ DOM ══════════════════════════════════════════════════════════════════════
+const mapCanvas  = document.getElementById('mapCanvas');
+const heatCanvas = document.getElementById('heatCanvas');
+const mCtx       = mapCanvas.getContext('2d');
+const hCtx       = heatCanvas.getContext('2d');
+const loading    = document.getElementById('loading');
+
+let radarChart=null, utilChart=null, momChart=null;
+let currentGrid  = null;
+let mapImg       = null;
+
+// ══ MAP TABS ══════════════════════════════════════════════════════════════════
+const tabsEl = document.getElementById('map-tabs');
+MAPS.forEach(m => {
+  const btn = document.createElement('button');
+  btn.className = 'map-tab' + (m===S.map?' active':'');
+  btn.textContent = m.replace('de_','');
+  btn.onclick = () => loadMap(m);
+  tabsEl.appendChild(btn);
+});
+
+// ══ LAYER PILLS ══════════════════════════════════════════════════════════════
+const pillsEl = document.getElementById('layer-pills');
+// Position pills over the bottom of the map
+pillsEl.style.cssText = 'position:absolute;bottom:8px;left:8px;z-index:5;background:rgba(8,12,16,0.8);border:1px solid var(--border);padding:4px 8px;display:flex;gap:3px;flex-wrap:wrap;';
+
+LAYERS.forEach(l => {
+  const p = document.createElement('button');
+  p.className = 'pill' + (l.id===S.layer?' active':'');
+  p.textContent = l.label;
+  p.dataset.id  = l.id;
+  p.onclick = () => { S.layer=l.id; S.activeWp=null; updatePills(); updateHeatmap(); };
+  pillsEl.appendChild(p);
+});
+
+function updatePills(){
+  pillsEl.querySelectorAll('.pill').forEach(p=>{
+    p.classList.toggle('active', p.dataset.id===S.layer);
+  });
+}
+
+// ══ FILTERS ══════════════════════════════════════════════════════════════════
+document.getElementById('sel-side').onchange = e => { S.side=e.target.value; updateHeatmap(); updateKpis(); };
+document.getElementById('sel-nade').onchange = e => { S.nade=e.target.value; updateHeatmap(); updateKpis(); };
+
+// ══ DATA LOADING ══════════════════════════════════════════════════════════════
+async function loadMap(mapName) {
+  S.map = mapName;
+  S.activeWp = null;
+  S.layer = 'dmg_vic';
+
+  // Update tab active state
+  tabsEl.querySelectorAll('.map-tab').forEach(t=>{
+    t.classList.toggle('active', t.textContent===mapName.replace('de_',''));
+  });
+
+  // Show loading
+  loading.classList.remove('hidden');
+  document.getElementById('load-text').textContent = `Loading ${mapName}...`;
+
+  try {
+    const url = `${HF_BASE}/${mapName}.json`;
+    const res = await fetch(url);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    S.data = await res.json();
+
+    await loadMapImage(mapName);
+    resizeCanvases();
+    renderAll();
+
+    loading.classList.add('hidden');
+  } catch(e) {
+    document.getElementById('load-text').textContent = `Error: ${e.message}`;
+    console.error(e);
+  }
+}
+
+async function loadMapImage(mapName) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { mapImg = img; resolve(); };
+    img.onerror = () => { mapImg = null; resolve(); };
+    img.src = `${GH_MAPS}/${mapName}.png`;
+  });
+}
+
+// ══ CANVAS ════════════════════════════════════════════════════════════════════
+function resizeCanvases() {
+  const c = document.getElementById('center');
+  const w = c.clientWidth, h = c.clientHeight;
+  mapCanvas.width = heatCanvas.width = w;
+  mapCanvas.height = heatCanvas.height = h;
+  drawMapImage();
+  drawCurrentHeatmap();
+}
+
+function drawMapImage() {
+  const w=mapCanvas.width, h=mapCanvas.height;
+  mCtx.clearRect(0,0,w,h);
+  if(!mapImg) return;
+  // Draw to offscreen to remove black bg
+  const off=document.createElement('canvas');
+  off.width=mapImg.naturalWidth; off.height=mapImg.naturalHeight;
+  const oct=off.getContext('2d');
+  oct.drawImage(mapImg,0,0);
+  const id=oct.getImageData(0,0,off.width,off.height);
+  for(let i=0;i<id.data.length;i+=4){
+    if(id.data[i]<30&&id.data[i+1]<30&&id.data[i+2]<30) id.data[i+3]=0;
+  }
+  oct.putImageData(id,0,0);
+  mCtx.drawImage(off,0,0,w,h);
+}
+
+// ══ HEATMAP ═══════════════════════════════════════════════════════════════════
+function getGridKey() {
+  if(!S.data) return null;
+  const l=S.layer, n=S.nade, s=S.side;
+
+  // Weapon kill positions override
+  if(S.activeWp) {
+    const k='kills_'+S.activeWp.replace(/-/g,'').replace(/ /g,'_');
+    if(S.data.heatmaps[k]) return k;
+  }
+
+  let key=l;
+  if(n!=='all' && l.startsWith('nade')) {
+    const base=l.includes('land')?'nade_land':'nade_thrown';
+    key=`${base}_${n}`;
+    if(s!=='all') key+=`_${s}`;
+  } else if(s!=='all' && l.startsWith('dmg')) {
+    key=`${l}_${s}`;
+  }
+  return S.data.heatmaps[key] ? key : l;
+}
+
+function getScale(key) {
+  if(!key) return HM_SCALES.dmg;
+  if(key.includes('_ct')) return HM_SCALES.ct;
+  if(key.endsWith('_t') || key.includes('_t_')) return HM_SCALES.t;
+  if(key.includes('land')) return HM_SCALES.land;
+  if(key.includes('thrown')) return HM_SCALES.thrown;
+  return HM_SCALES.dmg;
+}
+
+function interpColor(scale, t) {
+  for(let i=0;i<scale.length-1;i++){
+    if(t>=scale[i][0]&&t<=scale[i+1][0]){
+      const a=(t-scale[i][0])/(scale[i+1][0]-scale[i][0]);
+      return blend(scale[i][1],scale[i+1][1],a);
+    }
+  }
+  return scale[scale.length-1][1];
+}
+
+function blend(c1,c2,t){
+  const n=s=>s.match(/[\d.]+/g).map(Number);
+  const a=n(c1),b=n(c2);
+  const r=a.map((v,i)=>v+(b[i]-v)*t);
+  const isRgba=c1.includes('rgba');
+  return isRgba
+    ?`rgba(${r[0].toFixed(0)},${r[1].toFixed(0)},${r[2].toFixed(0)},${r[3].toFixed(2)})`
+    :`rgb(${r[0].toFixed(0)},${r[1].toFixed(0)},${r[2].toFixed(0)})`;
+}
+
+function drawCurrentHeatmap() {
+  const w=heatCanvas.width, h=heatCanvas.height;
+  hCtx.clearRect(0,0,w,h);
+  if(!currentGrid||!S.data) return;
+  const key=getGridKey();
+  const scale=getScale(key);
+  const bins=currentGrid.bins||BINS;
+  const cw=w/bins+0.5, ch=h/bins+0.5;
+  for(let i=0;i<currentGrid.r.length;i++){
+    const v=currentGrid.v[i]/255;
+    if(v<0.02) continue;
+    hCtx.fillStyle=interpColor(scale,v);
+    hCtx.fillRect(currentGrid.c[i]*cw, currentGrid.r[i]*ch, cw, ch);
+  }
+}
+
+let fadeAnim=null;
+function updateHeatmap(){
+  if(!S.data) return;
+  const key=getGridKey();
+  const newGrid=S.data.heatmaps[key]||null;
+  if(fadeAnim) cancelAnimationFrame(fadeAnim);
+
+  let alpha=parseFloat(heatCanvas.style.opacity)||0.85;
+  function fadeOut(){
+    alpha=Math.max(0,alpha-0.1);
+    heatCanvas.style.opacity=alpha;
+    if(alpha>0){ fadeAnim=requestAnimationFrame(fadeOut); }
+    else{
+      currentGrid=newGrid;
+      drawCurrentHeatmap();
+      fadeIn();
+    }
+  }
+  function fadeIn(){
+    alpha=Math.min(0.85,alpha+0.1);
+    heatCanvas.style.opacity=alpha;
+    if(alpha<0.85) fadeAnim=requestAnimationFrame(fadeIn);
+  }
+  fadeOut();
+}
+
+// ══ RADAR ═════════════════════════════════════════════════════════════════════
+function renderRadar(){
+  const weapons=S.data.weapons||[];
+  if(!weapons.length) return;
+  const axes=['hs','dmg','pen','leth','range','vol'];
+  const labels=['HS%','DMG/Hit','Armor Pen','Lethality','Range','Volume'];
+  const FLOOR=15;
+
+  // Per-axis min-max normalize
+  const norm=axes.map(ax=>{
+    const vals=weapons.map(w=>w[ax]||0);
+    const mn=Math.min(...vals),mx=Math.max(...vals);
+    return weapons.map(w=>mx>mn?FLOOR+((w[ax]||0)-mn)/(mx-mn)*(100-FLOOR):FLOOR);
+  });
+
+  const datasets=weapons.map((w,i)=>{
+    const [lc,fc]=RADAR_COLORS[i%6];
+    return{
+      label:w.wp,
+      data:[...axes.map((_,ai)=>norm[ai][i]),norm[0][i]],
+      borderColor:lc,backgroundColor:fc,
+      borderWidth:1.5,pointRadius:0,
+    };
+  });
+
+  if(radarChart) radarChart.destroy();
+  radarChart=new Chart(document.getElementById('radarChart'),{
+    type:'radar',
+    data:{labels:[...labels,labels[0]],datasets},
+    options:{
+      responsive:true,maintainAspectRatio:true,
+      animation:{duration:500,easing:'easeInOutQuart'},
+      plugins:{legend:{display:false}},
+      scales:{r:{
+        min:0,max:100,
+        grid:{color:C.border},ticks:{display:false},
+        pointLabels:{color:C.txt2,font:{family:'Share Tech Mono',size:7}},
+      }},
+    },
+  });
+}
+
+// ══ WEAPON BARS ═══════════════════════════════════════════════════════════════
+function renderWeaponBars(){
+  const weapons=S.data.weapons||[];
+  const wrap=document.getElementById('wp-bars');
+  wrap.innerHTML='';
+  const maxH=Math.max(...weapons.map(w=>w.hits||0));
+  weapons.forEach((w,i)=>{
+    const [lc]=RADAR_COLORS[i%6];
+    const pct=maxH>0?((w.hits||0)/maxH*100).toFixed(0):0;
+    const div=document.createElement('div');
+    div.className='wp-row';
+    div.dataset.wp=w.wp;
+    div.innerHTML=`
+      <div class="wp-row-head">
+        <span class="wp-name">${w.wp}</span>
+        <span class="wp-cnt">${(w.hits||0).toLocaleString()}</span>
+      </div>
+      <div class="bar-bg"><div class="bar-fill" data-pct="${pct}%" style="background:${lc}"></div></div>`;
+    div.onclick=()=>{
+      const isActive=S.activeWp===w.wp;
+      S.activeWp=isActive?null:w.wp;
+      wrap.querySelectorAll('.wp-row').forEach(r=>r.classList.remove('active'));
+      if(!isActive){div.classList.add('active');S.layer='dmg_vic';}
+      updatePills();
+      updateHeatmap();
+    };
+    wrap.appendChild(div);
+  });
+  setTimeout(()=>wrap.querySelectorAll('.bar-fill').forEach(el=>{el.style.width=el.dataset.pct}),50);
+}
+
+// ══ HITBOX BARS ═══════════════════════════════════════════════════════════════
+function renderHitbox(){
+  const hb=S.data.hitbox||{};
+  const order=['Head','Chest','Stomach','Arms','Legs','Generic'];
+  const cols={Head:C.kill,Chest:C.orange,Stomach:'#C88A2A',Arms:C.txt2,Legs:'#253545',Generic:'#1C2B3A'};
+  const wrap=document.getElementById('hb-bars');
+  wrap.innerHTML='';
+  const mx=Math.max(...Object.values(hb));
+  order.forEach(z=>{
+    const v=hb[z]||0;
+    const div=document.createElement('div');
+    div.className='hb-row';
+    div.innerHTML=`
+      <span class="hb-label">${z}</span>
+      <div class="hb-bg"><div class="hb-fill" data-pct="${mx>0?(v/mx*100).toFixed(0):0}%" style="background:${cols[z]}"></div></div>
+      <span class="hb-pct">${v}%</span>`;
+    wrap.appendChild(div);
+  });
+  setTimeout(()=>wrap.querySelectorAll('.hb-fill').forEach(el=>{el.style.width=el.dataset.pct}),100);
+}
+
+// ══ ATFF ══════════════════════════════════════════════════════════════════════
+function renderAtff(){
+  const all=S.data.atff_all||{};
+  const vals=Object.values(all);
+  if(!vals.length) return;
+  const mn=Math.min(...vals),mx=Math.max(...vals);
+  const cur=S.data.atff_map||mn;
+  const pct=((cur-mn)/(mx-mn+0.001)*100).toFixed(1);
+  const marker=document.getElementById('atff-marker');
+  marker.style.left=pct+'%';
+  marker.dataset.v=cur.toFixed(1)+'s';
+  document.getElementById('atff-mn').textContent=mn.toFixed(1)+'s';
+  document.getElementById('atff-mx').textContent=mx.toFixed(1)+'s';
+}
+
+// ══ KPIs ══════════════════════════════════════════════════════════════════════
+function animNum(el,target,suffix='',dec=0){
+  const start=parseFloat(el.textContent.replace(/[^0-9.-]/g,''))||0;
+  const steps=20; let i=0;
+  const tick=()=>{
+    i++;const t=i/steps;
+    const ease=t<0.5?2*t*t:(4-2*t)*t-1;
+    const v=start+(target-start)*ease;
+    el.textContent=(dec?v.toFixed(dec):Math.round(v)).toLocaleString()+suffix;
+    if(i<steps) requestAnimationFrame(tick);
+    else el.textContent=(dec?target.toFixed(dec):Math.round(target)).toLocaleString()+suffix;
+  };
+  requestAnimationFrame(tick);
+}
+
+function updateKpis(){
+  if(!S.data) return;
+  const m=S.data.meta||{};
+  animNum(document.getElementById('kv-kills'),m.n_kills||0);
+  animNum(document.getElementById('kv-flash'),S.data.flash_eff||0,'%',1);
+  const nk=S.data.nade_kpis||{};
+  const nTotal=S.nade==='all'
+    ?Object.values(nk).reduce((s,v)=>s+(v.total||0),0)
+    :(nk[S.nade]?.total||0);
+  animNum(document.getElementById('kv-nades'),nTotal);
+  const wp=S.data.weapons||[];
+  const dmg=S.activeWp
+    ?(wp.find(w=>w.wp===S.activeWp)?.dmg||0)
+    :(wp.length?wp.reduce((s,w)=>s+(w.dmg||0),0)/wp.length:0);
+  animNum(document.getElementById('kv-dmg'),dmg,'',1);
+}
+
+// ══ UTILITY CHART ══════════════════════════════════════════════════════════════
+function renderUtilChart(){
+  const nk=S.data.nade_kpis||{};
+  const nades=Object.keys(nk).filter(k=>k!=='undefined'&&k!=='null');
+  if(!nades.length) return;
+  if(utilChart) utilChart.destroy();
+  utilChart=new Chart(document.getElementById('utilChart'),{
+    type:'bar',
+    data:{
+      labels:nades,
+      datasets:[
+        {label:'CT',data:nades.map(n=>nk[n]?.ct||0),backgroundColor:C.ct,borderRadius:2},
+        {label:'T', data:nades.map(n=>nk[n]?.t||0), backgroundColor:C.orange,borderRadius:2},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      animation:{duration:500},
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:C.txt2,font:{family:'Share Tech Mono',size:7}},grid:{color:C.border}},
+        y:{ticks:{color:C.txt2,font:{family:'Share Tech Mono',size:7}},grid:{color:C.border}},
+      },
+    },
+  });
+}
+
+// ══ MOMENTUM CHART ═════════════════════════════════════════════════════════════
+function renderMomChart(){
+  const mom=S.data.momentum||[];
+  if(!mom.length) return;
+  const rounds=mom.map(r=>r.round);
+  const deltas=mom.map(r=>r.delta||0);
+  if(momChart) momChart.destroy();
+  momChart=new Chart(document.getElementById('momChart'),{
+    type:'line',
+    data:{
+      labels:rounds,
+      datasets:[
+        {data:deltas.map(v=>Math.max(0,v)),fill:true,backgroundColor:'rgba(75,159,212,0.15)',
+         borderColor:C.ct,borderWidth:1.5,tension:0.4,pointRadius:0},
+        {data:deltas.map(v=>Math.min(0,v)),fill:true,backgroundColor:'rgba(244,115,14,0.15)',
+         borderColor:C.orange,borderWidth:1.5,tension:0.4,pointRadius:0},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      animation:{duration:500},
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:C.txt2,font:{size:7},maxTicksLimit:8},grid:{color:C.border}},
+        y:{ticks:{color:C.txt2,font:{size:7}},grid:{color:C.border}},
+      },
+    },
+  });
+}
+
+// ══ RENDER ALL ═════════════════════════════════════════════════════════════════
+function renderAll(){
+  updatePills();
+  renderRadar();
+  renderWeaponBars();
+  renderHitbox();
+  renderAtff();
+  renderUtilChart();
+  renderMomChart();
+  updateKpis();
+  // Initial heatmap
+  const key=getGridKey();
+  currentGrid=S.data.heatmaps[key]||null;
+  heatCanvas.style.opacity='0.85';
+  drawCurrentHeatmap();
+}
+
+// ══ RESIZE ════════════════════════════════════════════════════════════════════
+window.addEventListener('resize',()=>{
+  resizeCanvases();
+});
+
+// ══ BOOT ══════════════════════════════════════════════════════════════════════
+loadMap(MAPS[0]);
+</script>
+</body>
+</html>
